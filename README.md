@@ -3,7 +3,7 @@
 [![Discord](https://img.shields.io/discord/1369798082195095592?label=Join%20MCords%20Discord&style=flat-square)](https://discord.gg/FdHhRYW66P)
 
 
-**This is** a lightweight template written in C, designed to have all the essentials I need.  
+**This is** a lightweight minecraft proxy written in C.
 
 ---
 
@@ -15,7 +15,7 @@
 ### 📂 Clone the Repository
 
 ```bash
-git clone https://github.com/profic0de/template.git
+git clone https://github.com/mcords-servers/v3.git
 ```
 
 ---
