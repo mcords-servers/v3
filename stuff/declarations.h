@@ -27,6 +27,23 @@ typedef struct Bytes {
     int fd;
 } Bytes;
 
+typedef struct PacketField {
+    int type;
+    union {
+        int varint;
+        unsigned short us;
+        struct {
+            const char *data;
+            size_t len;
+        } string;
+        long long ll;
+    } content;
+} PacketField;
+
+extern PacketField *packet;
+extern size_t packet_count;
+extern int packet_fd;
+
 ssize_t packet_send_fd(int fd, const void *data, size_t len);
 size_t packet_send_all(const void *data, size_t len);
 ssize_t packet_send_bytes(const Bytes *packet);
@@ -35,5 +52,6 @@ ssize_t packet_send_bytes(const Bytes *packet);
 #define EVENT_LPS (void *)1
 #define EVENT_FRE (void *)2
 #define EVENT_PKT_RAW (void *)3
+#define EVENT_PKT (void *)4
 
 #endif
