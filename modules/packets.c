@@ -5,13 +5,13 @@ static void on_packet(ptr p) {
 
     // you can also use global packet_count / packet_fd
     for (size_t i = 0; i < packet_count; i++) {
-        if (pkt[i].type == 1) { // varint
+        if (pkt[i].type == PACKET_TYPE_VARINT) {
             // LOG("field[%zu] varint=%d", i, pkt[i].content.varint);
-        } else if (pkt[i].type == 2) { // string
+        } else if (pkt[i].type == PACKET_TYPE_STRING) {
             // LOG("field[%zu] string_len=%zu", i, pkt[i].content.string.len);
-        } else if (pkt[i].type == 3) { // unsigned short
+        } else if (pkt[i].type == PACKET_TYPE_US) {
             // LOG("field[%zu] us=%hu", i, pkt[i].content.us);
-        } else if (pkt[i].type == 4) { // long long
+        } else if (pkt[i].type == PACKET_TYPE_LONG_LONG) {
             // LOG("field[%zu] ll=%lld", i, pkt[i].content.ll);
         }
     }

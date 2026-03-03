@@ -11,25 +11,6 @@ static StatusConn *conns;
 static size_t conn_count;
 static size_t conn_capacity;
 
-static size_t encode_varint(unsigned char *dst, int value) {
-    size_t out = 0;
-    unsigned int v = (unsigned int)value;
-
-    do {
-        unsigned char byte = (unsigned char)(v & 0x7F);
-        v >>= 7;
-        if (v) byte |= 0x80;
-        dst[out++] = byte;
-    } while (v);
-
-    return out;
-}
-
-static size_t varint_size(int value) {
-    unsigned char tmp[5];
-    return encode_varint(tmp, value);
-}
-
 static StatusConn *get_conn(int fd) {
     for (size_t i = 0; i < conn_count; i++) {
         if (conns[i].fd == fd) return &conns[i];
@@ -108,46 +89,21 @@ static void send_status_json(int fd, int protocol_version) {
              proto, motd);
     free(motd);
 
-    int inner_len = 1 + (int)varint_size(json_len) + json_len;
-    size_t total_len = varint_size(inner_len) + (size_t)inner_len;
-    unsigned char *out = malloc(total_len);
-    if (!out) {
-        free(json);
-        return;
-    }
-
-    size_t off = 0;
-    off += encode_varint(out + off, inner_len);
-    off += encode_varint(out + off, 0);
-    off += encode_varint(out + off, json_len);
-    memcpy(out + off, json, (size_t)json_len);
-    off += (size_t)json_len;
-
-    packet_send_fd(fd, out, off);
-    free(out);
+    PacketField fields[2];
+    memset(fields, 0, sizeof(fields));
+    fields[0].content.varint = 0; /* status response packet id */
+    fields[1].content.string.data = json;
+    fields[1].content.string.len = (size_t)json_len;
+    packet_send_template_fd(fd, "v s262144", fields, 2);
     free(json);
 }
 
 static void send_pong_ll(int fd, long long value) {
-    unsigned char out[16];
-    unsigned long long v = (unsigned long long)value;
-    unsigned char payload8[8];
-    payload8[0] = (unsigned char)((v >> 56) & 0xFFu);
-    payload8[1] = (unsigned char)((v >> 48) & 0xFFu);
-    payload8[2] = (unsigned char)((v >> 40) & 0xFFu);
-    payload8[3] = (unsigned char)((v >> 32) & 0xFFu);
-    payload8[4] = (unsigned char)((v >> 24) & 0xFFu);
-    payload8[5] = (unsigned char)((v >> 16) & 0xFFu);
-    payload8[6] = (unsigned char)((v >> 8) & 0xFFu);
-    payload8[7] = (unsigned char)(v & 0xFFu);
-    size_t off = 0;
-
-    off += encode_varint(out + off, 9);
-    off += encode_varint(out + off, 1);
-    memcpy(out + off, payload8, 8);
-    off += 8;
-
-    packet_send_fd(fd, out, off);
+    PacketField fields[2];
+    memset(fields, 0, sizeof(fields));
+    fields[0].content.varint = 1; /* pong packet id */
+    fields[1].content.ll = value;
+    packet_send_template_fd(fd, "v ll", fields, 2);
 }
 
 static int try_handle_handshake(StatusConn *conn, const PacketField *pkt) {
@@ -184,7 +140,7 @@ static void on_packet(ptr p) {
         return;
     }
 
-    if (packet_count == 2 && pkt[0].type == PACKET_TYPE_VARINT && pkt[0].content.varint == 1 && pkt[1].type == PACKET_TYPE_LL) {
+    if (packet_count == 2 && pkt[0].type == PACKET_TYPE_VARINT && pkt[0].content.varint == 1 && pkt[1].type == PACKET_TYPE_LONG_LONG) {
         send_pong_ll(conn->fd, pkt[1].content.ll);
     }
 }

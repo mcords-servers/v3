@@ -30,20 +30,70 @@ typedef struct Bytes {
 typedef struct PacketField {
     int type;
     union {
-        int varint;
+        int boolean;
+        signed char b;
+        unsigned char ub;
+        short s;
         unsigned short us;
+        int i;
+        long long l;
+        float f;
+        double d;
+        int varint;
+        long long varlong;
         struct {
             const char *data;
             size_t len;
         } string;
         long long ll;
+        struct {
+            int x;
+            int y;
+            int z;
+        } position;
+        unsigned char angle;
+        unsigned char uuid[16];
+        struct {
+            const unsigned char *data;
+            size_t len;
+        } bytes;
+        struct {
+            int present;
+            const unsigned char *data;
+            size_t len;
+        } optional;
+        struct {
+            size_t count;
+            const unsigned char *data;
+            size_t len;
+        } array;
     } content;
 } PacketField;
 
-#define PACKET_TYPE_VARINT 1
-#define PACKET_TYPE_STRING 2
-#define PACKET_TYPE_US 3
-#define PACKET_TYPE_LL 4
+#define PACKET_TYPE_BOOL 1
+#define PACKET_TYPE_BYTE 2
+#define PACKET_TYPE_UBYTE 3
+#define PACKET_TYPE_SHORT 4
+#define PACKET_TYPE_US 5
+#define PACKET_TYPE_INT 6
+#define PACKET_TYPE_LONG 7
+#define PACKET_TYPE_FLOAT 8
+#define PACKET_TYPE_DOUBLE 9
+#define PACKET_TYPE_STRING 10
+#define PACKET_TYPE_VARINT 11
+#define PACKET_TYPE_VARLONG 12
+#define PACKET_TYPE_POSITION 13
+#define PACKET_TYPE_ANGLE 14
+#define PACKET_TYPE_UUID 15
+#define PACKET_TYPE_BITSET 16
+#define PACKET_TYPE_FIXED_BITSET 17
+#define PACKET_TYPE_JSON_TEXT 18
+#define PACKET_TYPE_IDENTIFIER 19
+#define PACKET_TYPE_LONG_LONG 20
+#define PACKET_TYPE_OPTIONAL 21
+#define PACKET_TYPE_PREFIXED_OPTIONAL 22
+#define PACKET_TYPE_ARRAY 23
+#define PACKET_TYPE_PREFIXED_ARRAY 24
 
 extern PacketField *packet;
 extern size_t packet_count;
@@ -52,6 +102,14 @@ extern int packet_fd;
 ssize_t packet_send_fd(int fd, const void *data, size_t len);
 size_t packet_send_all(const void *data, size_t len);
 ssize_t packet_send_bytes(const Bytes *packet);
+int packet_build_template(const char *tmpl,
+                          const PacketField *fields,
+                          size_t field_count,
+                          unsigned char *out,
+                          size_t out_cap,
+                          size_t *out_len);
+int packet_send_template_fd(int fd, const char *tmpl, const PacketField *fields, size_t field_count);
+int packet_send_template_current(const char *tmpl, const PacketField *fields, size_t field_count);
 
 #define EVENT (void *)0
 #define EVENT_LPS (void *)1
