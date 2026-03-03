@@ -1,7 +1,7 @@
 #include "kit.h"
 
 static void func(ptr ptr) {
-
+    
 }
 
 __attribute__((constructor))

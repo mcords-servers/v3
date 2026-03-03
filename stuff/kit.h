@@ -10,11 +10,13 @@
 #include <time.h>
 #include <SDL2/SDL.h>
 #include <unistd.h>
-
+#include <sys/socket.h>
 
 typedef void *ptr; //I do like pointers
 
 #include "declarations.h"
+
+extern Bytes packet_buffer;
 
 extern char exitbool;
 extern unsigned long lps;
