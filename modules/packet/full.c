@@ -280,8 +280,8 @@ static void on_raw_packet(ptr unused) {
 
         packet_fd = conn->fd;
         if (!parse_packet_against_templates(conn->buf + packet_start, (size_t)frame_len)) {
-            LOG("Dropping fd=%d: no template match", conn->fd);
-            send_disconnect_message(conn->fd, "Hello, Reverse Engineer");
+            // LOG("Dropping fd=%d: no template match", conn->fd);
+            send_disconnect_message(conn->fd, "Hello, Reverse Engineer!");
             remove_conn_fd(conn->fd);
             return;
         }

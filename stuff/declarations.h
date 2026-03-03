@@ -40,6 +40,11 @@ typedef struct PacketField {
     } content;
 } PacketField;
 
+#define PACKET_TYPE_VARINT 1
+#define PACKET_TYPE_STRING 2
+#define PACKET_TYPE_US 3
+#define PACKET_TYPE_LL 4
+
 extern PacketField *packet;
 extern size_t packet_count;
 extern int packet_fd;

@@ -5,36 +5,11 @@ typedef struct StatusConn {
     int seen_handshake;
     int status_mode;
     int protocol_version;
-    unsigned char buf[16384];
-    size_t len;
 } StatusConn;
 
 static StatusConn *conns;
 static size_t conn_count;
 static size_t conn_capacity;
-
-static int decode_varint(const unsigned char *src, size_t src_len, int *value, size_t *used) {
-    int result = 0;
-    int shift = 0;
-    size_t i = 0;
-
-    while (i < src_len && i < 5) {
-        unsigned char byte = src[i];
-        result |= (int)(byte & 0x7F) << shift;
-        i += 1;
-
-        if ((byte & 0x80) == 0) {
-            *value = result;
-            *used = i;
-            return 1;
-        }
-
-        shift += 7;
-    }
-
-    if (i >= 5) return -1;
-    return 0;
-}
 
 static size_t encode_varint(unsigned char *dst, int value) {
     size_t out = 0;
@@ -153,8 +128,18 @@ static void send_status_json(int fd, int protocol_version) {
     free(json);
 }
 
-static void send_pong(int fd, const unsigned char *payload8) {
+static void send_pong_ll(int fd, long long value) {
     unsigned char out[16];
+    unsigned long long v = (unsigned long long)value;
+    unsigned char payload8[8];
+    payload8[0] = (unsigned char)((v >> 56) & 0xFFu);
+    payload8[1] = (unsigned char)((v >> 48) & 0xFFu);
+    payload8[2] = (unsigned char)((v >> 40) & 0xFFu);
+    payload8[3] = (unsigned char)((v >> 32) & 0xFFu);
+    payload8[4] = (unsigned char)((v >> 24) & 0xFFu);
+    payload8[5] = (unsigned char)((v >> 16) & 0xFFu);
+    payload8[6] = (unsigned char)((v >> 8) & 0xFFu);
+    payload8[7] = (unsigned char)(v & 0xFFu);
     size_t off = 0;
 
     off += encode_varint(out + off, 9);
@@ -165,94 +150,43 @@ static void send_pong(int fd, const unsigned char *payload8) {
     packet_send_fd(fd, out, off);
 }
 
-static int try_handle_handshake(StatusConn *conn, const unsigned char *payload, size_t payload_len) {
-    size_t off = 0;
-    int protocol = 0;
-    int host_len = 0;
-    int next_state = 0;
-    size_t used = 0;
+static int try_handle_handshake(StatusConn *conn, const PacketField *pkt) {
+    if (packet_count != 5) return 0;
+    if (pkt[0].type != PACKET_TYPE_VARINT || pkt[0].content.varint != 0) return 0; /* packet id */
+    if (pkt[1].type != PACKET_TYPE_VARINT) return 0; /* protocol */
+    if (pkt[2].type != PACKET_TYPE_STRING) return 0; /* host */
+    if (pkt[3].type != PACKET_TYPE_US) return 0; /* port */
+    if (pkt[4].type != PACKET_TYPE_VARINT) return 0; /* next_state */
 
-    if (decode_varint(payload + off, payload_len - off, &protocol, &used) != 1) return 0;
-    off += used;
-
-    if (decode_varint(payload + off, payload_len - off, &host_len, &used) != 1) return 0;
-    off += used;
-    if (host_len < 0 || off + (size_t)host_len + 2 > payload_len) return 0;
-    off += (size_t)host_len;
-
-    off += 2; /* server port */
-    if (decode_varint(payload + off, payload_len - off, &next_state, &used) != 1) return 0;
-
-    conn->protocol_version = protocol;
+    conn->protocol_version = pkt[1].content.varint;
     conn->seen_handshake = 1;
-    conn->status_mode = (next_state == 1);
+    conn->status_mode = (pkt[4].content.varint == 1);
     return 1;
 }
 
-static void handle_packet(StatusConn *conn, const unsigned char *packet, size_t packet_len) {
-    int packet_id = 0;
-    size_t id_len = 0;
-    int rc = decode_varint(packet, packet_len, &packet_id, &id_len);
-    if (rc != 1) return;
+static void on_packet(ptr p) {
+    PacketField *pkt = (PacketField *)p;
+    if (!pkt) return;
+    if (packet_fd < 0) return;
 
-    const unsigned char *payload = packet + id_len;
-    size_t payload_len = packet_len - id_len;
+    StatusConn *conn = get_conn(packet_fd);
+    if (!conn) return;
 
-    /* Always allow a fresh handshake on packet id 0 to recover from fd reuse. */
-    if (packet_id == 0 && try_handle_handshake(conn, payload, payload_len)) {
+    if (try_handle_handshake(conn, pkt)) {
         return;
     }
 
     if (!conn->seen_handshake) return;
     if (!conn->status_mode) return;
 
-    if (packet_id == 0) {
+    if (packet_count == 1 && pkt[0].type == PACKET_TYPE_VARINT && pkt[0].content.varint == 0) {
         send_status_json(conn->fd, conn->protocol_version);
         return;
     }
 
-    if (packet_id == 1 && payload_len == 8) {
-        send_pong(conn->fd, payload);
+    if (packet_count == 2 && pkt[0].type == PACKET_TYPE_VARINT && pkt[0].content.varint == 1 && pkt[1].type == PACKET_TYPE_LL) {
+        send_pong_ll(conn->fd, pkt[1].content.ll);
     }
-}
-
-static void on_raw_packet(ptr unused) {
-    (void)unused;
-
-    if (packet_buffer.n <= 0) return;
-    if ((size_t)packet_buffer.n > sizeof(packet_buffer.buf)) return;
-
-    StatusConn *conn = get_conn(packet_buffer.fd);
-    if (!conn) return;
-
-    size_t in_len = (size_t)packet_buffer.n;
-    if (conn->len + in_len > sizeof(conn->buf)) conn->len = 0;
-    memcpy(conn->buf + conn->len, packet_buffer.buf, in_len);
-    conn->len += in_len;
-
-    size_t consumed = 0;
-    while (consumed < conn->len) {
-        int frame_len = 0;
-        size_t header_len = 0;
-        int frame_rc = decode_varint(conn->buf + consumed, conn->len - consumed, &frame_len, &header_len);
-        if (frame_rc == 0) break;
-        if (frame_rc < 0 || frame_len < 0) {
-            conn->len = 0;
-            return;
-        }
-
-        size_t packet_start = consumed + header_len;
-        if (packet_start + (size_t)frame_len > conn->len) break;
-
-        handle_packet(conn, conn->buf + packet_start, (size_t)frame_len);
-        consumed = packet_start + (size_t)frame_len;
-    }
-
-    if (consumed == 0) return;
-    if (consumed < conn->len) {
-        memmove(conn->buf, conn->buf + consumed, conn->len - consumed);
-    }
-    conn->len -= consumed;
 }
 
 static void status_cleanup(ptr unused) {
@@ -266,6 +200,6 @@ static void status_cleanup(ptr unused) {
 __attribute__((constructor))
 static void status_start(void) {
     LOG("Module %s loaded", FILENAME);
-    on_event(EVENT_PKT_RAW, on_raw_packet);
+    on_event(EVENT_PKT, on_packet);
     on_event(EVENT_FRE, status_cleanup);
 }
