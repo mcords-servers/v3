@@ -106,17 +106,19 @@ static void send_pong_ll(int fd, long long value) {
     packet_send_template_fd(fd, "v ll", fields, 2);
 }
 
-static int try_handle_handshake(StatusConn *conn, const PacketField *pkt) {
-    if (packet_count != 5) return 0;
-    if (pkt[0].type != PACKET_TYPE_VARINT || pkt[0].content.varint != 0) return 0; /* packet id */
-    if (pkt[1].type != PACKET_TYPE_VARINT) return 0; /* protocol */
-    if (pkt[2].type != PACKET_TYPE_STRING) return 0; /* host */
-    if (pkt[3].type != PACKET_TYPE_US) return 0; /* port */
-    if (pkt[4].type != PACKET_TYPE_VARINT) return 0; /* next_state */
+static int try_handle_handshake(StatusConn *conn, const unsigned char *payload, size_t payload_len) {
+    PacketField hs[4];
+    size_t hs_n = 0;
+    int rc = packet_parse_template_fields(payload, payload_len, "v s255 us v", hs, 4, &hs_n);
+    if (rc != 1 || hs_n != 4) return 0;
+    if (hs[0].type != PACKET_TYPE_VARINT) return 0;
+    if (hs[1].type != PACKET_TYPE_STRING) return 0;
+    if (hs[2].type != PACKET_TYPE_US) return 0;
+    if (hs[3].type != PACKET_TYPE_VARINT) return 0;
 
-    conn->protocol_version = pkt[1].content.varint;
+    conn->protocol_version = hs[0].content.varint;
     conn->seen_handshake = 1;
-    conn->status_mode = (pkt[4].content.varint == 1);
+    conn->status_mode = (hs[3].content.varint == 1);
     return 1;
 }
 
@@ -124,24 +126,36 @@ static void on_packet(ptr p) {
     PacketField *pkt = (PacketField *)p;
     if (!pkt) return;
     if (packet_fd < 0) return;
+    if (packet_count != 2) return;
+    if (pkt[0].type != PACKET_TYPE_VARINT) return;
+    if (pkt[1].type != PACKET_TYPE_RAW) return;
 
     StatusConn *conn = get_conn(packet_fd);
     if (!conn) return;
 
-    if (try_handle_handshake(conn, pkt)) {
+    int packet_id = pkt[0].content.varint;
+    const unsigned char *payload = pkt[1].content.bytes.data;
+    size_t payload_len = pkt[1].content.bytes.len;
+
+    if (packet_id == 0 && try_handle_handshake(conn, payload, payload_len)) {
         return;
     }
 
     if (!conn->seen_handshake) return;
     if (!conn->status_mode) return;
 
-    if (packet_count == 1 && pkt[0].type == PACKET_TYPE_VARINT && pkt[0].content.varint == 0) {
+    if (packet_id == 0 && payload_len == 0) {
         send_status_json(conn->fd, conn->protocol_version);
         return;
     }
 
-    if (packet_count == 2 && pkt[0].type == PACKET_TYPE_VARINT && pkt[0].content.varint == 1 && pkt[1].type == PACKET_TYPE_LONG_LONG) {
-        send_pong_ll(conn->fd, pkt[1].content.ll);
+    if (packet_id == 1) {
+        PacketField ping[1];
+        size_t ping_n = 0;
+        int rc = packet_parse_template_fields(payload, payload_len, "ll", ping, 1, &ping_n);
+        if (rc == 1 && ping_n == 1 && ping[0].type == PACKET_TYPE_LONG_LONG) {
+            send_pong_ll(conn->fd, ping[0].content.ll);
+        }
     }
 }
 

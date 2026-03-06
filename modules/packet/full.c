@@ -6,12 +6,6 @@ typedef struct FullConn {
     size_t len;
 } FullConn;
 
-typedef struct PacketTemplate {
-    const char *name;
-    const char *tmpl;
-    size_t expected_count;
-} PacketTemplate;
-
 PacketField packet_store[16];
 PacketField *packet = packet_store;
 size_t packet_count;
@@ -20,12 +14,6 @@ int packet_fd = -1;
 static FullConn *conns;
 static size_t conn_count;
 static size_t conn_capacity;
-
-static const PacketTemplate templates[] = {
-    { "handshake", "v v s255 us v", 5 },
-    { "status_request", "v", 1 },
-    { "status_ping", "v ll", 2 }
-};
 
 static int decode_varint(const unsigned char *src, size_t src_len, int *value, size_t *used) {
     int result = 0;
@@ -511,16 +499,13 @@ static int parse_by_template(const unsigned char *data, size_t data_len, const c
     return 1;
 }
 
-static int parse_packet_against_templates(const unsigned char *packet_data, size_t packet_len) {
-    for (size_t i = 0; i < sizeof(templates) / sizeof(templates[0]); i++) {
-        size_t n = 0;
-        int rc = parse_by_template(packet_data, packet_len, templates[i].tmpl, packet_store, sizeof(packet_store) / sizeof(packet_store[0]), &n);
-        if (rc != 1) continue;
-        if (n != templates[i].expected_count) continue;
-        packet_count = n;
-        return 1;
-    }
-    return 0;
+int packet_parse_template_fields(const unsigned char *data,
+                                 size_t data_len,
+                                 const char *tmpl,
+                                 PacketField *out,
+                                 size_t out_cap,
+                                 size_t *out_n) {
+    return parse_by_template(data, data_len, tmpl, out, out_cap, out_n);
 }
 
 static void on_raw_packet(ptr unused) {
@@ -551,12 +536,21 @@ static void on_raw_packet(ptr unused) {
         if (packet_start + (size_t)frame_len > conn->len) break;
 
         packet_fd = conn->fd;
-        if (!parse_packet_against_templates(conn->buf + packet_start, (size_t)frame_len)) {
-            // LOG("Dropping fd=%d: no template match", conn->fd);
+        int packet_id = 0;
+        size_t id_len = 0;
+        int id_rc = decode_varint(conn->buf + packet_start, (size_t)frame_len, &packet_id, &id_len);
+        if (id_rc != 1 || id_len > (size_t)frame_len) {
             send_disconnect_message(conn->fd, "Hello, Reverse Engineer!");
             remove_conn_fd(conn->fd);
             return;
         }
+
+        packet_store[0].type = PACKET_TYPE_VARINT;
+        packet_store[0].content.varint = packet_id;
+        packet_store[1].type = PACKET_TYPE_RAW;
+        packet_store[1].content.bytes.data = conn->buf + packet_start + id_len;
+        packet_store[1].content.bytes.len = (size_t)frame_len - id_len;
+        packet_count = 2;
 
         call_event(EVENT_PKT, packet);
         consumed = packet_start + (size_t)frame_len;

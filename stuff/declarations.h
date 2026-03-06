@@ -94,6 +94,7 @@ typedef struct PacketField {
 #define PACKET_TYPE_PREFIXED_OPTIONAL 22
 #define PACKET_TYPE_ARRAY 23
 #define PACKET_TYPE_PREFIXED_ARRAY 24
+#define PACKET_TYPE_RAW 25
 
 extern PacketField *packet;
 extern size_t packet_count;
@@ -108,6 +109,12 @@ int packet_build_template(const char *tmpl,
                           unsigned char *out,
                           size_t out_cap,
                           size_t *out_len);
+int packet_parse_template_fields(const unsigned char *data,
+                                 size_t data_len,
+                                 const char *tmpl,
+                                 PacketField *out,
+                                 size_t out_cap,
+                                 size_t *out_n);
 int packet_send_template_fd(int fd, const char *tmpl, const PacketField *fields, size_t field_count);
 int packet_send_template_current(const char *tmpl, const PacketField *fields, size_t field_count);
 
