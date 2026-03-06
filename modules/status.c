@@ -10,6 +10,10 @@ typedef struct StatusConn {
 static StatusConn *conns;
 static size_t conn_count;
 static size_t conn_capacity;
+static const char *STATUS_JSON_FMT =
+    "{\"version\":{\"name\":\"MCords\",\"protocol\":%d},"
+    "\"players\":{\"max\":0,\"online\":0,\"sample\":[{\"name\":\"Status: ok\",\"id\":\"4566e69f-c907-48ee-8d71-d7ba5aa00d20\"}]},"
+    "\"description\":{\"text\":\"%s\"}}";
 
 static StatusConn *get_conn(int fd) {
     for (size_t i = 0; i < conn_count; i++) {
@@ -66,11 +70,7 @@ static void send_status_json(int fd, int protocol_version) {
     if (!motd) return;
 
     int proto = protocol_version > 0 ? protocol_version : default_protocol();
-    int json_len = snprintf(NULL, 0,
-                            "{\"version\":{\"name\":\"MCords\",\"protocol\":%d},"
-                            "\"players\":{\"max\":0,\"online\":0,\"sample\":[]},"
-                            "\"description\":{\"text\":\"%s\"}}",
-                            proto, motd);
+    int json_len = snprintf(NULL, 0, STATUS_JSON_FMT, proto, motd);
     if (json_len <= 0) {
         free(motd);
         return;
@@ -82,11 +82,7 @@ static void send_status_json(int fd, int protocol_version) {
         return;
     }
 
-    snprintf(json, (size_t)json_len + 1,
-             "{\"version\":{\"name\":\"MCords\",\"protocol\":%d},"
-             "\"players\":{\"max\":0,\"online\":0,\"sample\":[]},"
-             "\"description\":{\"text\":\"%s\"}}",
-             proto, motd);
+    snprintf(json, (size_t)json_len + 1, STATUS_JSON_FMT, proto, motd);
     free(motd);
 
     PacketField fields[2];
