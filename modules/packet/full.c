@@ -505,7 +505,10 @@ int packet_parse_template_fields(const unsigned char *data,
                                  PacketField *out,
                                  size_t out_cap,
                                  size_t *out_n) {
-    return parse_by_template(data, data_len, tmpl, out, out_cap, out_n);
+    int rc = parse_by_template(data, data_len, tmpl, out, out_cap, out_n);
+    if (rc == 1) return 0; /* success */
+    if (rc == 0) return 1; /* incomplete */
+    return -1; /* invalid */
 }
 
 static void on_raw_packet(ptr unused) {

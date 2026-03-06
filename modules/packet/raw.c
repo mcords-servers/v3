@@ -9,6 +9,7 @@ static int *clients;
 static size_t client_count;
 static size_t client_capacity;
 Bytes packet_buffer;
+int fd_disconnected = -1;
 
 static int set_nonblocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
@@ -32,7 +33,10 @@ static uint16_t get_listen_port(void) {
 
 static void remove_client_at(size_t idx) {
     if (idx >= client_count) return;
-    close(clients[idx]);
+    fd_disconnected = clients[idx];
+    call_event(EVENT_FDC, NULL);
+    fds_clear_fd(fd_disconnected);
+    close(fd_disconnected);
     if (idx + 1 < client_count) {
         memmove(&clients[idx], &clients[idx + 1], (client_count - idx - 1) * sizeof(*clients));
     }

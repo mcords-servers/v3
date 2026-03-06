@@ -4,6 +4,8 @@
 #include "kit.h"
 
 typedef struct HttpResponse HttpResponse;
+typedef struct FdData FdData;
+typedef struct Memory Memory;
 
 void on_event(ptr event, ptr func);
 void call_event(ptr event, ptr ptr);
@@ -99,6 +101,7 @@ typedef struct PacketField {
 extern PacketField *packet;
 extern size_t packet_count;
 extern int packet_fd;
+extern int fd_disconnected;
 
 ssize_t packet_send_fd(int fd, const void *data, size_t len);
 size_t packet_send_all(const void *data, size_t len);
@@ -118,10 +121,32 @@ int packet_parse_template_fields(const unsigned char *data,
 int packet_send_template_fd(int fd, const char *tmpl, const PacketField *fields, size_t field_count);
 int packet_send_template_current(const char *tmpl, const PacketField *fields, size_t field_count);
 
+struct FdData {
+    char *key;
+    void *ptr;
+    int owned;
+    FdData *next;
+};
+
+struct Memory {
+    void *ptr;
+    Memory *next;
+};
+
+void *fds_set(int fd, const char *key, void *ptr);
+void *fds_get(int fd, const char *key);
+void *fds_del(int fd, const char *key);
+int fds_incr(int fd, const char *key);
+void fds_clear_fd(int fd);
+void fds_clear_all(void);
+void *mem_add(int fd, void *ptr);
+void mem_free(int fd);
+
 #define EVENT (void *)0
 #define EVENT_LPS (void *)1
 #define EVENT_FRE (void *)2
 #define EVENT_PKT_RAW (void *)3
 #define EVENT_PKT (void *)4
+#define EVENT_FDC (void *)5
 
 #endif

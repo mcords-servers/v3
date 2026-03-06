@@ -106,7 +106,7 @@ static int try_handle_handshake(StatusConn *conn, const unsigned char *payload, 
     PacketField hs[4];
     size_t hs_n = 0;
     int rc = packet_parse_template_fields(payload, payload_len, "v s255 us v", hs, 4, &hs_n);
-    if (rc != 1 || hs_n != 4) return 0;
+    if (rc || hs_n != 4) return 0;
     if (hs[0].type != PACKET_TYPE_VARINT) return 0;
     if (hs[1].type != PACKET_TYPE_STRING) return 0;
     if (hs[2].type != PACKET_TYPE_US) return 0;
@@ -115,6 +115,8 @@ static int try_handle_handshake(StatusConn *conn, const unsigned char *payload, 
     conn->protocol_version = hs[0].content.varint;
     conn->seen_handshake = 1;
     conn->status_mode = (hs[3].content.varint == 1);
+
+    fds_set(conn->fd, "status", (ptr)(long)(hs[3].content.varint));
     return 1;
 }
 
@@ -149,7 +151,7 @@ static void on_packet(ptr p) {
         PacketField ping[1];
         size_t ping_n = 0;
         int rc = packet_parse_template_fields(payload, payload_len, "ll", ping, 1, &ping_n);
-        if (rc == 1 && ping_n == 1 && ping[0].type == PACKET_TYPE_LONG_LONG) {
+        if (rc == 0 && ping_n == 1 && ping[0].type == PACKET_TYPE_LONG_LONG) {
             send_pong_ll(conn->fd, ping[0].content.ll);
         }
     }
