@@ -106,6 +106,7 @@ extern int fd_disconnected;
 ssize_t packet_send_fd(int fd, const void *data, size_t len);
 size_t packet_send_all(const void *data, size_t len);
 ssize_t packet_send_bytes(const Bytes *packet);
+int disconnect_fd(int fd);
 int packet_build_template(const char *tmpl,
                           const PacketField *fields,
                           size_t field_count,
@@ -131,6 +132,17 @@ struct FdData {
 struct Memory {
     void *ptr;
     Memory *next;
+};
+
+typedef struct PlayerInfo PlayerInfo;
+struct PlayerInfo {
+    int fd;
+    enum {
+        LOGIN,
+        CONFIG,
+        PLAY
+    } state;
+    char* username;
 };
 
 void *fds_set(int fd, const char *key, void *ptr);

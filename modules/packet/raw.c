@@ -52,6 +52,12 @@ static int remove_client_fd(int fd) {
     return 0;
 }
 
+int disconnect_fd(int fd) {
+    if (fd < 0) return 0;
+    shutdown(fd, SHUT_RDWR);
+    return remove_client_fd(fd);
+}
+
 static int add_client(int fd) {
     if (client_count == client_capacity) {
         size_t next_capacity = client_capacity ? client_capacity * 2 : 8;
