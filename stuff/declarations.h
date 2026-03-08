@@ -190,6 +190,7 @@ void mem_free(int fd);
 #define EVENT_PKT (void *)4
 #define EVENT_FDC (void *)5
 #define EVENT_REG (void *)6
+#define EVENT_WRLD (void *)7
 
 #define disconnect(fd) {disconnect_fd(fd); return;}
 

@@ -71,6 +71,7 @@ static void on_packet(PacketField* pkt) {
             packet_send_template_fd(packet_fd, "v s32767 s32767", send, 3);
         } else if (packet_id == 0x03 && payload_len == 0) {
             p->state=PLAY;
+            call_event(EVENT_WRLD, p);
             // LOG("Entering play state");
         } else if (packet_id==0x07 && payload_len) {
             call_event(EVENT_REG, p);

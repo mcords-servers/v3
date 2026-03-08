@@ -44,6 +44,8 @@ static void remove_client_at(size_t idx) {
 }
 
 static int remove_client_fd(int fd) {
+    PlayerInfo* p = fds_get(fd, "player");
+    if (p) call_event(EVENT_WRLD, p);
     for (size_t i = 0; i < client_count; i++) {
         if (clients[i] != fd) continue;
         remove_client_at(i);
