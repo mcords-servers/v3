@@ -74,6 +74,9 @@ static void on_packet(PacketField* pkt) {
             LOG("Entering play state");
         } else if (packet_id==0x07 && payload_len) {
             call_event(EVENT_REG, p);
+            PacketField fields[1];
+            fields[0].content.varint = 0x03;
+            packet_send_template_fd(p->fd, "v", fields, 1);
         }
 
         break;
