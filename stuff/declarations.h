@@ -144,6 +144,7 @@ struct PlayerInfo {
     } state;
     char* username;
     char* brand;
+    char* world;
     struct __attribute__((packed)) {
         char locale[16];
         int8_t view_distance;
