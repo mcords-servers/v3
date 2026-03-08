@@ -143,6 +143,34 @@ struct PlayerInfo {
         PLAY
     } state;
     char* username;
+    char* brand;
+    struct __attribute__((packed)) {
+        char locale[16];
+        int8_t view_distance;
+
+        struct {
+            unsigned chat_mode:2;
+            unsigned chat_colors:1;
+
+            union {
+                unsigned skin_parts_mask:8;
+                struct {
+                    unsigned cape:1;
+                    unsigned jacket:1;
+                    unsigned left_sleeve:1;
+                    unsigned right_sleeve:1;
+                    unsigned left_pants:1;
+                    unsigned right_pants:1;
+                    unsigned hat:1;
+                    unsigned unused:1;
+                };
+            };
+            unsigned main_hand:1;
+            unsigned text_filtering:1;
+            unsigned allow_server_listings:1;
+            unsigned particle_status:2;
+        };
+    } info;
 };
 
 void *fds_set(int fd, const char *key, void *ptr);
@@ -160,5 +188,8 @@ void mem_free(int fd);
 #define EVENT_PKT_RAW (void *)3
 #define EVENT_PKT (void *)4
 #define EVENT_FDC (void *)5
+#define EVENT_REG (void *)6
+
+#define disconnect(fd) {disconnect_fd(fd); return;}
 
 #endif

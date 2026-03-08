@@ -95,7 +95,7 @@ ssize_t packet_send_fd(int fd, const void *data, size_t len) {
 
     ssize_t written = send_nonblocking(fd, data, len);
     if (written < 0) {
-        LOG("send failed on fd=%d: %s", fd, strerror(errno));
+        // LOG("send failed on fd=%d: %s", fd, strerror(errno));
         remove_client_fd(fd);
         return -1;
     }
@@ -182,7 +182,7 @@ static void recv_tick(ptr unused) {
 
             if (errno == EAGAIN || errno == EWOULDBLOCK) break;
             if (errno == EINTR) continue;
-            LOG("recv failed on fd=%d: %s", fd, strerror(errno));
+            // LOG("recv failed on fd=%d: %s", fd, strerror(errno));
             dropped = 1;
             break;
         }

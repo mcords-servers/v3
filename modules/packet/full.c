@@ -499,6 +499,43 @@ static int parse_by_template(const unsigned char *data, size_t data_len, const c
     return 1;
 }
 
+/*
+ * Template token legend for packet_parse_template_fields():
+ * Primitive tokens:
+ *   bool   : Boolean (1 byte, must be 0 or 1)
+ *   b      : signed byte (1 byte)
+ *   ub     : unsigned byte (1 byte)
+ *   sh     : signed short, big-endian (2 bytes)
+ *   us     : unsigned short, big-endian (2 bytes)
+ *   i      : signed int, big-endian (4 bytes)
+ *   l      : signed long long, big-endian (8 bytes)
+ *   f      : float32, IEEE754, big-endian bytes (4 bytes)
+ *   d      : float64/double, IEEE754, big-endian bytes (8 bytes)
+ *   ll     : signed long long, big-endian (8 bytes)
+ *   v      : VarInt
+ *   vl     : VarLong
+ *   pos    : Minecraft packed position (x/z/y in 64 bits)
+ *   ang    : angle byte
+ *   uuid   : UUID bytes (16 bytes)
+ *   bitset : VarInt count + count*8 bytes
+ *   fbsN   : fixed bitset with N bits (ceil(N/8) bytes), e.g. fbs24
+ *
+ * String-like tokens:
+ *   sN     : String with VarInt length prefix and max length N, e.g. s16, s32767
+ *   id     : alias for s32767 (identifier)
+ *   json   : alias for s262144 (JSON text)
+ *
+ * Composite tokens:
+ *   arrN:T   : fixed array of N elements of token T, e.g. arr3:uuid
+ *   parr:T   : VarInt-prefixed array of token T
+ *   opt:T    : optional T (present if T parses at current offset)
+ *   popt:T   : prefixed optional T (1-byte flag 0/1, then T if flag is 1)
+ *
+ * Return codes:
+ *   0  -> success
+ *   1  -> incomplete input buffer
+ *  -1  -> invalid data/template
+ */
 int packet_parse_template_fields(const unsigned char *data,
                                  size_t data_len,
                                  const char *tmpl,

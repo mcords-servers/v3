@@ -16,7 +16,7 @@ static void on_packet(PacketField* pkt) {
         size_t n = 0;
         int rc = packet_parse_template_fields(payload, payload_len, "s16 uuid", login_with_uuid, 2, &n);
         if (rc == 0 && n == 2 && login_with_uuid[0].type == PACKET_TYPE_STRING) {
-            PlayerInfo* p = malloc(sizeof(PlayerInfo));
+            PlayerInfo* p = calloc(1, sizeof(PlayerInfo));
             if (!p) {
                 shutdown(packet_fd, SHUT_RDWR);
                 return;
