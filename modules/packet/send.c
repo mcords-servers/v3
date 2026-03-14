@@ -152,6 +152,8 @@ int packet_send_kind(int fd, PacketOutKind kind, int protocol, const PacketOut *
             if (!packet_write_u8(&w, 0)) return 0;
         }
         return packet_send_writer(fd, 0x07, &w);
+    case PKT_OUT_CONFIG_FINISH:
+        return packet_send(fd, 0x03, (ptr)0, 0);
     }
 
     return 0;

@@ -31,7 +31,7 @@ static void on_packet(PacketView *pkt) {
     p->state = LOGIN;
     p->username = username;
 
-    LOG("%s is connecting", username);
+    // LOG("%s is connecting", username);
 
     PacketOut out;
     out.kind = PKT_OUT_LOGIN_SUCCESS;

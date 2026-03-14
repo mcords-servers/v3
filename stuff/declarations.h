@@ -102,7 +102,8 @@ typedef enum PacketOutKind {
     PKT_OUT_LOGIN_SUCCESS,
     PKT_OUT_CONFIG_KNOWN_PACKS,
     PKT_OUT_CONFIG_PLUGIN_MESSAGE,
-    PKT_OUT_REGISTRY_DATA
+    PKT_OUT_REGISTRY_DATA,
+    PKT_OUT_CONFIG_FINISH
 } PacketOutKind;
 
 typedef struct PacketOut {
@@ -201,7 +202,7 @@ struct PlayerInfo {
     } state;
     char* username;
     char* brand;
-    char* world;
+    char world[16];
     struct __attribute__((packed)) {
         char locale[16];
         int8_t view_distance;

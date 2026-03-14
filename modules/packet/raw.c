@@ -35,6 +35,11 @@ static void remove_client_at(size_t idx) {
     if (idx >= client_count) return;
     fd_disconnected = clients[idx];
     call_event(EVENT_FDC, NULL);
+    PlayerInfo *p = fds_get(fd_disconnected, "player");
+    if (p) {
+        strncpy(p->world, "", 16);
+        call_event(EVENT_WRLD, p);
+    }
     fds_clear_fd(fd_disconnected);
     close(fd_disconnected);
     if (idx + 1 < client_count) {

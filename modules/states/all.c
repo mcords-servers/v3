@@ -7,17 +7,18 @@ static void on_packet(PacketView *pkt) {
     if (!p && pkt->id && fds_get(pkt->fd, "status") != (ptr)1) disconnect(pkt->fd);
     if (!p) return;
 
+    int protocol = (int)(long)fds_get(pkt->fd, "protocol");
+
     switch (p->state) {
     case LOGIN:
         if (pkt->id == 0x03 && pkt->payload_len == 0) {
             p->state = CONFIG;
-            LOG("Entering config state");
+            // LOG("Entering config state");
         }
         break;
 
     case CONFIG:
         if (pkt->id == 0x00 && pkt->payload_len) {
-            int protocol = (int)(long)fds_get(pkt->fd, "protocol");
             PacketParsed parsed;
             if (!packet_parse(PKT_CONFIG_CLIENT_INFORMATION, protocol, pkt->payload, pkt->payload_len, &parsed)) {
                 disconnect(pkt->fd);
@@ -49,7 +50,6 @@ static void on_packet(PacketView *pkt) {
             out.data.known_packs.version_len = 7;
             packet_send_kind(pkt->fd, PKT_OUT_CONFIG_KNOWN_PACKS, protocol, &out);
         } else if (pkt->id == 0x02 && pkt->payload_len) {
-            int protocol = (int)(long)fds_get(pkt->fd, "protocol");
             PacketParsed parsed;
             if (!packet_parse(PKT_CONFIG_PLUGIN_MESSAGE, protocol, pkt->payload, pkt->payload_len, &parsed)) return;
             if (parsed.data.plugin_message.channel_len != 15 ||
@@ -75,9 +75,12 @@ static void on_packet(PacketView *pkt) {
             packet_send_kind(pkt->fd, PKT_OUT_CONFIG_PLUGIN_MESSAGE, protocol, &out);
         } else if (pkt->id == 0x03 && pkt->payload_len == 0) {
             p->state = PLAY;
-            LOG("Entering play state");
+            // LOG("Entering play state");
+            strncpy(p->world, "lobby", 16);
+            call_event(EVENT_WRLD, p);
         } else if (pkt->id == 0x07 && pkt->payload_len) {
             call_event(EVENT_REG, p);
+            packet_send_kind(pkt->fd, PKT_OUT_CONFIG_FINISH, protocol, (ptr)1);
         }
         break;
 
