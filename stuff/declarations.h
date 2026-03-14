@@ -29,98 +29,155 @@ typedef struct Bytes {
     int fd;
 } Bytes;
 
-typedef struct PacketField {
-    int type;
+typedef struct PacketView {
+    int fd;
+    int id;
+    const unsigned char *payload;
+    size_t payload_len;
+} PacketView;
+
+typedef struct PacketReader {
+    const unsigned char *buf;
+    size_t len;
+    size_t off;
+} PacketReader;
+
+typedef struct PacketWriter {
+    unsigned char *buf;
+    size_t cap;
+    size_t len;
+} PacketWriter;
+
+typedef enum PacketKind {
+    PKT_HANDSHAKE,
+    PKT_STATUS_PING,
+    PKT_LOGIN_START,
+    PKT_CONFIG_CLIENT_INFORMATION,
+    PKT_CONFIG_PLUGIN_MESSAGE
+} PacketKind;
+
+typedef struct PacketParsed {
+    PacketKind kind;
     union {
-        int boolean;
-        signed char b;
-        unsigned char ub;
-        short s;
-        unsigned short us;
-        int i;
-        long long l;
-        float f;
-        double d;
-        int varint;
-        long long varlong;
         struct {
-            const char *data;
-            size_t len;
-        } string;
-        long long ll;
+            int protocol;
+            const char *address;
+            size_t address_len;
+            unsigned short port;
+            int next_state;
+        } handshake;
         struct {
-            int x;
-            int y;
-            int z;
-        } position;
-        unsigned char angle;
-        unsigned char uuid[16];
+            long long value;
+        } ping;
         struct {
+            const char *username;
+            size_t username_len;
+            unsigned char uuid[16];
+        } login_start;
+        struct {
+            char locale[16];
+            size_t locale_len;
+            int8_t view_distance;
+            int chat_mode;
+            int chat_colors;
+            unsigned char skin_parts;
+            int main_hand;
+            int text_filtering;
+            int allow_server_listings;
+            int particle_status;
+        } client_info;
+        struct {
+            const char *channel;
+            size_t channel_len;
             const unsigned char *data;
-            size_t len;
-        } bytes;
-        struct {
-            int present;
-            const unsigned char *data;
-            size_t len;
-        } optional;
-        struct {
-            size_t count;
-            const unsigned char *data;
-            size_t len;
-        } array;
-    } content;
-} PacketField;
+            size_t data_len;
+        } plugin_message;
+    } data;
+} PacketParsed;
 
-#define PACKET_TYPE_BOOL 1
-#define PACKET_TYPE_BYTE 2
-#define PACKET_TYPE_UBYTE 3
-#define PACKET_TYPE_SHORT 4
-#define PACKET_TYPE_US 5
-#define PACKET_TYPE_INT 6
-#define PACKET_TYPE_LONG 7
-#define PACKET_TYPE_FLOAT 8
-#define PACKET_TYPE_DOUBLE 9
-#define PACKET_TYPE_STRING 10
-#define PACKET_TYPE_VARINT 11
-#define PACKET_TYPE_VARLONG 12
-#define PACKET_TYPE_POSITION 13
-#define PACKET_TYPE_ANGLE 14
-#define PACKET_TYPE_UUID 15
-#define PACKET_TYPE_BITSET 16
-#define PACKET_TYPE_FIXED_BITSET 17
-#define PACKET_TYPE_JSON_TEXT 18
-#define PACKET_TYPE_IDENTIFIER 19
-#define PACKET_TYPE_LONG_LONG 20
-#define PACKET_TYPE_OPTIONAL 21
-#define PACKET_TYPE_PREFIXED_OPTIONAL 22
-#define PACKET_TYPE_ARRAY 23
-#define PACKET_TYPE_PREFIXED_ARRAY 24
-#define PACKET_TYPE_RAW 25
+typedef enum PacketOutKind {
+    PKT_OUT_LOGIN_DISCONNECT,
+    PKT_OUT_STATUS_RESPONSE,
+    PKT_OUT_PONG,
+    PKT_OUT_LOGIN_SUCCESS,
+    PKT_OUT_CONFIG_KNOWN_PACKS,
+    PKT_OUT_CONFIG_PLUGIN_MESSAGE,
+    PKT_OUT_REGISTRY_DATA
+} PacketOutKind;
 
-extern PacketField *packet;
-extern size_t packet_count;
-extern int packet_fd;
+typedef struct PacketOut {
+    PacketOutKind kind;
+    union {
+        struct {
+            const char *json;
+            size_t json_len;
+        } login_disconnect;
+        struct {
+            const char *json;
+            size_t json_len;
+        } status_response;
+        struct {
+            long long value;
+        } pong;
+        struct {
+            unsigned char uuid[16];
+            const char *username;
+            size_t username_len;
+            int properties_count;
+        } login_success;
+        struct {
+            int count;
+            const char *ns;
+            size_t ns_len;
+            const char *id;
+            size_t id_len;
+            const char *version;
+            size_t version_len;
+        } known_packs;
+        struct {
+            const char *channel;
+            size_t channel_len;
+            const char *value;
+            size_t value_len;
+        } plugin_message;
+        struct {
+            const char *registry_id;
+            size_t registry_id_len;
+            const char **entries;
+            size_t entry_count;
+        } registry_data;
+    } data;
+} PacketOut;
 extern int fd_disconnected;
 
 ssize_t packet_send_fd(int fd, const void *data, size_t len);
 size_t packet_send_all(const void *data, size_t len);
 ssize_t packet_send_bytes(const Bytes *packet);
 int disconnect_fd(int fd);
-int packet_build_template(const char *tmpl,
-                          const PacketField *fields,
-                          size_t field_count,
-                          unsigned char *out,
-                          size_t out_cap,
-                          size_t *out_len);
-int packet_parse_template_fields(const unsigned char *data,
-                                 size_t data_len,
-                                 const char *tmpl,
-                                 PacketField *out,
-                                 size_t out_cap,
-                                 size_t *out_n);
-int packet_send_template_fd(int fd, const char *tmpl, const PacketField *fields, size_t field_count);
-int packet_send_template_current(const char *tmpl, const PacketField *fields, size_t field_count);
+
+void packet_reader_init(PacketReader *r, const unsigned char *buf, size_t len);
+int packet_read_varint(PacketReader *r, int *out);
+int packet_read_u8(PacketReader *r, unsigned char *out);
+int packet_read_u16(PacketReader *r, unsigned short *out);
+int packet_read_i64(PacketReader *r, long long *out);
+int packet_read_string(PacketReader *r, size_t max_len, const char **data, size_t *len);
+int packet_read_uuid(PacketReader *r, unsigned char out[16]);
+int packet_read_remaining(PacketReader *r, const unsigned char **data, size_t *len);
+
+void packet_writer_init(PacketWriter *w, unsigned char *buf, size_t cap);
+int packet_write_varint(PacketWriter *w, int value);
+int packet_write_u8(PacketWriter *w, unsigned char value);
+int packet_write_u16(PacketWriter *w, unsigned short value);
+int packet_write_i64(PacketWriter *w, long long value);
+int packet_write_string(PacketWriter *w, const char *data, size_t len);
+int packet_write_uuid(PacketWriter *w, const unsigned char uuid[16]);
+int packet_write_bytes(PacketWriter *w, const unsigned char *data, size_t len);
+
+int packet_send(int fd, int packet_id, const unsigned char *payload, size_t payload_len);
+int packet_send_writer(int fd, int packet_id, PacketWriter *w);
+
+int packet_parse(PacketKind kind, int protocol, const unsigned char *payload, size_t payload_len, PacketParsed *out);
+int packet_send_kind(int fd, PacketOutKind kind, int protocol, const PacketOut *out);
 
 struct FdData {
     char *key;

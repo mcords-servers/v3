@@ -1,41 +1,14 @@
 #include "kit.h"
 
-static size_t append_varint(unsigned char *dst, int value) {
-    size_t out = 0;
-    unsigned int v = (unsigned int)value;
-    do {
-        unsigned char byte = (unsigned char)(v & 0x7F);
-        v >>= 7;
-        if (v) byte |= 0x80;
-        dst[out++] = byte;
-    } while (v);
-    return out;
-}
-
-static size_t append_identifier(unsigned char *dst, const char *id) {
-    size_t len = strlen(id);
-    size_t off = append_varint(dst, (int)len);
-    memcpy(dst + off, id, len);
-    return off + len;
-}
-
 static void send_registry(PlayerInfo *p, const char *registry_id, const char **entries, size_t entry_count) {
-    unsigned char encoded[4096];
-    size_t off = 0;
-
-    for (size_t i = 0; i < entry_count; i++) {
-        off += append_identifier(encoded + off, entries[i]);
-        encoded[off++] = 0; /* TAG_End => null/absent NBT payload */
-    }
-
-    PacketField fields[4];
-    fields[0].content.varint = 0x07; /* Clientbound Registry Data (Configuration) */
-    fields[1].content.string.data = registry_id;
-    fields[1].content.string.len = strlen(registry_id);
-    fields[2].content.varint = (int)entry_count;
-    fields[3].content.array.data = encoded;
-    fields[3].content.array.len = off;
-    packet_send_template_fd(p->fd, "v id v arr", fields, 4);
+    PacketOut out;
+    out.kind = PKT_OUT_REGISTRY_DATA;
+    out.data.registry_data.registry_id = registry_id;
+    out.data.registry_data.registry_id_len = strlen(registry_id);
+    out.data.registry_data.entries = entries;
+    out.data.registry_data.entry_count = entry_count;
+    int protocol = (int)(long)fds_get(p->fd, "protocol");
+    packet_send_kind(p->fd, PKT_OUT_REGISTRY_DATA, protocol, &out);
 }
 
 static void on_packet(PlayerInfo *p) {

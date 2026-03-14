@@ -85,74 +85,56 @@ static void send_status_json(int fd, int protocol_version) {
     snprintf(json, (size_t)json_len + 1, STATUS_JSON_FMT, proto, motd);
     free(motd);
 
-    PacketField fields[2];
-    memset(fields, 0, sizeof(fields));
-    fields[0].content.varint = 0; /* status response packet id */
-    fields[1].content.string.data = json;
-    fields[1].content.string.len = (size_t)json_len;
-    packet_send_template_fd(fd, "v s262144", fields, 2);
+    PacketOut out;
+    out.kind = PKT_OUT_STATUS_RESPONSE;
+    out.data.status_response.json = json;
+    out.data.status_response.json_len = (size_t)json_len;
+    packet_send_kind(fd, PKT_OUT_STATUS_RESPONSE, protocol_version, &out);
     free(json);
 }
 
-static void send_pong_ll(int fd, long long value) {
-    PacketField fields[2];
-    memset(fields, 0, sizeof(fields));
-    fields[0].content.varint = 1; /* pong packet id */
-    fields[1].content.ll = value;
-    packet_send_template_fd(fd, "v ll", fields, 2);
+static void send_pong_ll(int fd, int protocol, long long value) {
+    PacketOut out;
+    out.kind = PKT_OUT_PONG;
+    out.data.pong.value = value;
+    packet_send_kind(fd, PKT_OUT_PONG, protocol, &out);
 }
 
-static int try_handle_handshake(StatusConn *conn, const unsigned char *payload, size_t payload_len) {
-    PacketField hs[4];
-    size_t hs_n = 0;
-    int rc = packet_parse_template_fields(payload, payload_len, "v s255 us v", hs, 4, &hs_n);
-    if (rc || hs_n != 4) return 0;
-    if (hs[0].type != PACKET_TYPE_VARINT) return 0;
-    if (hs[1].type != PACKET_TYPE_STRING) return 0;
-    if (hs[2].type != PACKET_TYPE_US) return 0;
-    if (hs[3].type != PACKET_TYPE_VARINT) return 0;
+static int try_handle_handshake(StatusConn *conn, const PacketView *pkt) {
+    PacketParsed parsed;
+    if (!packet_parse(PKT_HANDSHAKE, 0, pkt->payload, pkt->payload_len, &parsed)) return 0;
 
-    conn->protocol_version = hs[0].content.varint;
+    conn->protocol_version = parsed.data.handshake.protocol;
     conn->seen_handshake = 1;
-    conn->status_mode = (hs[3].content.varint == 1);
-
-    fds_set(conn->fd, "status", (ptr)(long)(hs[3].content.varint));
+    conn->status_mode = (parsed.data.handshake.next_state == 1);
+    fds_set(conn->fd, "status", (ptr)(long)(parsed.data.handshake.next_state));
+    fds_set(conn->fd, "protocol", (ptr)(long)(parsed.data.handshake.protocol));
     return 1;
 }
 
 static void on_packet(ptr p) {
-    PacketField *pkt = (PacketField *)p;
+    PacketView *pkt = (PacketView *)p;
     if (!pkt) return;
-    if (packet_fd < 0) return;
-    if (packet_count != 2) return;
-    if (pkt[0].type != PACKET_TYPE_VARINT) return;
-    if (pkt[1].type != PACKET_TYPE_RAW) return;
 
-    StatusConn *conn = get_conn(packet_fd);
+    StatusConn *conn = get_conn(pkt->fd);
     if (!conn) return;
 
-    int packet_id = pkt[0].content.varint;
-    const unsigned char *payload = pkt[1].content.bytes.data;
-    size_t payload_len = pkt[1].content.bytes.len;
-
-    if (packet_id == 0 && try_handle_handshake(conn, payload, payload_len)) {
+    if (pkt->id == 0 && try_handle_handshake(conn, pkt)) {
         return;
     }
 
     if (!conn->seen_handshake) return;
     if (!conn->status_mode) return;
 
-    if (packet_id == 0 && payload_len == 0) {
+    if (pkt->id == 0 && pkt->payload_len == 0) {
         send_status_json(conn->fd, conn->protocol_version);
         return;
     }
 
-    if (packet_id == 1) {
-        PacketField ping[1];
-        size_t ping_n = 0;
-        int rc = packet_parse_template_fields(payload, payload_len, "ll", ping, 1, &ping_n);
-        if (rc == 0 && ping_n == 1 && ping[0].type == PACKET_TYPE_LONG_LONG) {
-            send_pong_ll(conn->fd, ping[0].content.ll);
+    if (pkt->id == 1) {
+        PacketParsed parsed;
+        if (packet_parse(PKT_STATUS_PING, 0, pkt->payload, pkt->payload_len, &parsed)) {
+            send_pong_ll(conn->fd, conn->protocol_version, parsed.data.ping.value);
         }
     }
 }

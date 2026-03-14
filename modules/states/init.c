@@ -1,57 +1,45 @@
 #include "kit.h"
 
-static void on_packet(PacketField* pkt) {
+static void on_packet(PacketView *pkt) {
     if (!pkt) return;
-    if (packet_count != 2) return;
-    if (pkt[0].type != PACKET_TYPE_VARINT) return;
-    if (pkt[1].type != PACKET_TYPE_RAW) return;
-    int packet_id = pkt[0].content.varint;
-    const unsigned char *payload = pkt[1].content.bytes.data;
-    size_t payload_len = pkt[1].content.bytes.len;
+    if (pkt->id != 0) return;
+    if (fds_get(pkt->fd, "player") || ((long)fds_get(pkt->fd, "status")) != 2) return;
 
-    if (fds_get(packet_fd, "player") || ((long)fds_get(packet_fd, "status")) != 2) return;
-
-    if (packet_id == 0) {
-        PacketField login_with_uuid[2];
-        size_t n = 0;
-        int rc = packet_parse_template_fields(payload, payload_len, "s16 uuid", login_with_uuid, 2, &n);
-        if (rc == 0 && n == 2 && login_with_uuid[0].type == PACKET_TYPE_STRING) {
-            PlayerInfo* p = calloc(1, sizeof(PlayerInfo));
-            if (!p) {
-                shutdown(packet_fd, SHUT_RDWR);
-                return;
-            }
-            mem_add(packet_fd, p);
-            char *username = strndup(login_with_uuid[0].content.string.data, login_with_uuid[0].content.string.len);
-            if (!username) {
-                shutdown(packet_fd, SHUT_RDWR);
-                return;
-            }
-            mem_add(packet_fd, username); // so it gets freed on disconnect
-            fds_set(packet_fd, "player", p);
-            p->fd = packet_fd;
-            p->state = LOGIN;
-            p->username = username;
-
-            LOG("%s is connecting", username);
-
-            PacketField f[4];
-            memset(f, 0, sizeof(f));
-
-            f[0].content.varint = 0x02;                      // packet id
-            memcpy(f[1].content.uuid, login_with_uuid[1].content.uuid, 16);   // UUID bytes
-            f[2].content.string.data = username;             // char*
-            f[2].content.string.len = strlen(username);      // <= 16
-
-            f[3].content.array.count = 0;                    // properties count
-            f[3].content.array.data = NULL;
-            f[3].content.array.len = 0;
-
-            packet_send_template_fd(packet_fd, "v uuid s16 parr:prop", f, 4);
-
-            return;
-        }
+    PacketParsed parsed;
+    int protocol = (int)(long)fds_get(pkt->fd, "protocol");
+    if (!packet_parse(PKT_LOGIN_START, protocol, pkt->payload, pkt->payload_len, &parsed)) {
+        shutdown(pkt->fd, SHUT_RDWR);
+        return;
     }
+
+    PlayerInfo *p = calloc(1, sizeof(PlayerInfo));
+    if (!p) {
+        shutdown(pkt->fd, SHUT_RDWR);
+        return;
+    }
+    mem_add(pkt->fd, p);
+
+    char *username = strndup(parsed.data.login_start.username, parsed.data.login_start.username_len);
+    if (!username) {
+        shutdown(pkt->fd, SHUT_RDWR);
+        return;
+    }
+    mem_add(pkt->fd, username);
+
+    fds_set(pkt->fd, "player", p);
+    p->fd = pkt->fd;
+    p->state = LOGIN;
+    p->username = username;
+
+    LOG("%s is connecting", username);
+
+    PacketOut out;
+    out.kind = PKT_OUT_LOGIN_SUCCESS;
+    memcpy(out.data.login_success.uuid, parsed.data.login_start.uuid, 16);
+    out.data.login_success.username = username;
+    out.data.login_success.username_len = strlen(username);
+    out.data.login_success.properties_count = 0;
+    packet_send_kind(pkt->fd, PKT_OUT_LOGIN_SUCCESS, protocol, &out);
 }
 
 __attribute__((constructor))
