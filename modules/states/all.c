@@ -33,6 +33,7 @@ static void on_packet(PacketField* pkt) {
             p->info.main_hand =  parsed[++i].content.varint;
             p->info.text_filtering = parsed[++i].content.boolean;
             p->info.allow_server_listings = parsed[++i].content.boolean;
+            
             p->info.particle_status = parsed[++i].content.varint;
 
             PacketField f[5];
