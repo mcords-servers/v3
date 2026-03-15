@@ -18,7 +18,7 @@ static int set_nonblocking(int fd) {
 }
 
 static uint16_t get_listen_port(void) {
-    const char *raw = getenv("MCORDS_TCP_PORT");
+    const char *raw = get_config("server-port");
     if (!raw || !raw[0]) return 25565;
 
     char *end = NULL;

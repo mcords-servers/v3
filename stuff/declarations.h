@@ -22,6 +22,7 @@ int http_done(HttpResponse *req);
 long http_status(HttpResponse *req);
 const char *http_body(HttpResponse *req);
 size_t http_body_length(HttpResponse *req);
+char *get_config(char *name);
 
 typedef struct Bytes {
     char buf[4096];
